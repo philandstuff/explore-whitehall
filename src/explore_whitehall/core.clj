@@ -4,7 +4,7 @@
             [clojure.string :as str]
             [clojure.instant :as inst]
             [incanter.charts :as charts]
-            [incanter.core :as incanter]
+            [incanter.core :as i]
             [incanter.io :as iio]
             [incanter.zoo :as zoo]))
 
@@ -25,7 +25,7 @@
 
 (defn parse-val "detect and parse floating point numbers" [val-str]
   (cond
-   (not val-str) nil
+   (not val-str) 0
    (re-matches #"\d+\.\d*" val-str) (Double/parseDouble val-str)
    :else val-str))
 
@@ -41,15 +41,15 @@
 
 (defn timestamps "get timestamps from logstash stream" [data]
   (map #(.getTime (inst/read-instant-timestamp %))
-       (incanter/$ (keyword "@timestamp") data)))
+       (i/$ (keyword "@timestamp") data)))
 
 (defn parse-stream "parse a stream of rails log messages" [data]
-  (incanter/$map parse-message (keyword "@message") data))
+  (i/$map parse-message (keyword "@message") data))
 
 (defn decorate-data
   "decorate a dataset with the parsed fields from @message and parsed timestamps from @timestamp"
   [data]
-  (incanter/conj-cols (parse-stream data)
+  (i/conj-cols (parse-stream data)
                       (map (fn [ts] {:time ts}) (timestamps data))
                       data))
 
@@ -79,17 +79,36 @@
        :series-label colname))
     chart))
 
+(defn chart-rolling-medians [colnames data]
+  (let [[first-col & colnames] colnames
+        chart (charts/time-series-plot
+               (i/$ :time data)
+               (zoo/roll-median 40 (i/$ first-col data))
+               :series-label first-col
+               :x-label "Timestamp"
+               :y-label "Duration"
+               :legend true)]
+    (doseq [colname colnames]
+      (charts/add-lines
+       chart
+       (i/$ :time data)
+       (zoo/roll-median 40 (i/$map #(or % 0) colname data))
+       :series-label colname))
+    chart))
+
 (comment
-  (incanter/view (chart-column :duration (decorate-data normal-data)))
-  (incanter/view (chart-column :db (decorate-data normal-data)))
-  (incanter/view (chart-column :view (decorate-data normal-data)))
-  (incanter/view (chart-columns [:duration :db :view] (decorate-data normal-data)))
+  (i/view (chart-column :duration (i/transform-col (decorate-data normal-data) :duration #(zoo/roll-median 40 %))))
+  (i/view (chart-column :db (decorate-data normal-data)))
+  (i/view (chart-column :view (decorate-data normal-data)))
+  (i/view (chart-columns [:duration :db :view] (decorate-data normal-data)))
+  (i/view (chart-rolling-medians [:duration :view :db] (decorate-data normal-data)))
+  (i/head (i/$ :duration (decorate-data normal-data)))
   )
 
 (comment
-  (incanter/view normal-data)
+  (i/view normal-data)
 
-  (incanter/view (incanter/conj-cols (incanter/sel normal-data :except-cols (keyword "@message"))
-                                     (incanter/$map parse-message (keyword "@message") normal-data)))
+  (i/view (i/conj-cols (i/sel normal-data :except-cols (keyword "@message"))
+                                     (i/$map parse-message (keyword "@message") normal-data)))
   )
 
