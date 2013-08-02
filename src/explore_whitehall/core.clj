@@ -54,25 +54,28 @@
                       data))
 
 (defn chart-column [colname data]
-  (doto  (charts/time-series-plot
-          :time
-          colname
-          :data data
-          :y-label (str colname)
-          :x-label "time")
-    #_(charts/add-lines :time :db :series-label "db")))
+  (charts/time-series-plot
+   :time
+   colname
+   :data data
+   :y-label (str colname)
+   :x-label "time"))
 
 (defn chart-columns [colnames data]
-  (let [chart (charts/time-series-plot
-               :time :time
+  (let [[first-col & colnames] colnames
+        chart (charts/time-series-plot
+               :time first-col
                :data data
                :y-label "value"
-               :x-label "time")]
+               :x-label "time"
+               :legend true
+               :series-label first-col)]
     (doseq [colname colnames]
       (charts/add-lines
        chart
        :time
        colname
+       :data data
        :series-label colname))
     chart))
 
@@ -80,13 +83,13 @@
   (incanter/view (chart-column :duration (decorate-data normal-data)))
   (incanter/view (chart-column :db (decorate-data normal-data)))
   (incanter/view (chart-column :view (decorate-data normal-data)))
-  (incanter/view (chart-columns [:duration] (decorate-data normal-data)))
+  (incanter/view (chart-columns [:duration :db :view] (decorate-data normal-data)))
   )
 
 (comment
   (incanter/view normal-data)
 
-  (incanter/view (incanter/conj-cols (incanter/sel data :except-cols (keyword "@message"))
+  (incanter/view (incanter/conj-cols (incanter/sel normal-data :except-cols (keyword "@message"))
                                      (incanter/$map parse-message (keyword "@message") normal-data)))
   )
 
